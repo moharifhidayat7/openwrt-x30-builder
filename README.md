@@ -24,8 +24,10 @@ TOTOLINK X30
 - LuCI
 - LuCI HTTPS support
 - kmod-tun
-- Tailscale / tailscaled
+- One selectable VPN provider: Tailscale or NetBird
 - ca-bundle
+
+The manual `workflow_dispatch` trigger exposes a **VPN provider** choice. Push and scheduled builds use Tailscale by default.
 
 ## Post-flash Tailscale setup
 
@@ -37,4 +39,14 @@ tailscale up
 tailscale status
 ```
 
-Do not commit Tailscale credentials, auth keys, reusable auth tokens, OAuth secrets, API keys, or other secrets to this repository.
+## Post-flash NetBird setup
+
+```sh
+ssh root@192.168.1.1
+/etc/init.d/netbird enable
+/etc/init.d/netbird start
+netbird up
+netbird status
+```
+
+Do not commit Tailscale or NetBird credentials, auth keys, reusable auth tokens, setup keys, OAuth secrets, API keys, or other secrets to this repository.
