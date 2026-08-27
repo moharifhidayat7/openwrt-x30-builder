@@ -11,15 +11,6 @@ on:
           - tailscale
           - netbird
         default: tailscale
-  push:
-    branches:
-      - main
-    paths:
-      - "config/x30.config"
-      - "patches/**"
-      - ".github/workflows/build-x30-25.12.yml"
-  schedule:
-    - cron: "0 3 * * 6"
 
 permissions:
   contents: write
