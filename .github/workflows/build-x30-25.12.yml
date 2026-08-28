@@ -2,15 +2,6 @@ name: Build TOTOLINK X30 OpenWrt latest release
 
 on:
   workflow_dispatch:
-    inputs:
-      vpn_provider:
-        description: VPN provider to include in the firmware
-        required: true
-        type: choice
-        options:
-          - tailscale
-          - netbird
-        default: tailscale
 
 permissions:
   contents: write
@@ -22,7 +13,6 @@ concurrency:
 env:
   X30_PATCH_COMMIT: 1e4bed859aeb3c7047ee602866d833efed853e2d
   BUILD_JOBS: 2
-  VPN_PROVIDER: ${{ inputs.vpn_provider || 'tailscale' }}
 
 jobs:
   build:
@@ -57,18 +47,6 @@ jobs:
             fi
           done
 
-          case "${VPN_PROVIDER}" in
-            tailscale|netbird)
-              VPN_CONFIG_SYMBOL="CONFIG_PACKAGE_${VPN_PROVIDER}"
-              ;;
-            *)
-              echo "ERROR: Unsupported VPN provider: ${VPN_PROVIDER}"
-              exit 1
-              ;;
-          esac
-
-          echo "Selected VPN provider: ${VPN_PROVIDER}"
-          echo "VPN_CONFIG_SYMBOL=${VPN_CONFIG_SYMBOL}" >> "$GITHUB_ENV"
 
           required_config_symbols=(
             CONFIG_TARGET_mediatek=y
@@ -77,6 +55,8 @@ jobs:
             CONFIG_PACKAGE_luci=y
             CONFIG_PACKAGE_luci-ssl=y
             CONFIG_PACKAGE_kmod-tun=y
+            CONFIG_PACKAGE_tailscale=y
+            CONFIG_PACKAGE_netbird=y
             CONFIG_PACKAGE_ca-bundle=y
           )
 
@@ -87,10 +67,6 @@ jobs:
             fi
           done
 
-          if grep -Eq '^CONFIG_PACKAGE_(tailscale|netbird)=y$' config/x30.config; then
-            echo "ERROR: config/x30.config must not select a VPN provider directly."
-            exit 1
-          fi
 
           if grep -q 'compatible = "totolink,X30", "mediatek,mt7981";' patches/0001-mediatek-add-TOTOLINK-X30-support.patch; then
             echo "ERROR: Patch 0001 still contains the broken uppercase Linux DTS compatible string."
@@ -229,13 +205,11 @@ jobs:
               ../patches/0001-mediatek-add-TOTOLINK-X30-support.patch \
               ../patches/0002-mediatek-filogic-add-totolink-x30-fit-upgrade.patch \
               ../.github/workflows/build-x30-25.12.yml
-            printf '%s\n' "VPN_PROVIDER=${VPN_PROVIDER}"
           } | sha256sum | cut -c1-12)"
 
           echo "upstream_sha=${UPSTREAM_SHA}" >> "$GITHUB_OUTPUT"
           echo "config_hash=${CONFIG_HASH}" >> "$GITHUB_OUTPUT"
           echo "openwrt_version=${OPENWRT_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "vpn_provider=${VPN_PROVIDER}" >> "$GITHUB_OUTPUT"
 
           if grep -q "Device/totolink_X30" target/linux/mediatek/image/filogic.mk; then
             echo "X30 image profile already exists in ${OPENWRT_REF}; not applying profile patch."
@@ -268,7 +242,7 @@ jobs:
           grep -n "totolink,X30" target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
           grep -n "totolink,x30" target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
 
-          TAG="x30-${OPENWRT_VERSION}-${VPN_PROVIDER}-${UPSTREAM_SHA}-${PATCH_ID}-${CONFIG_HASH}"
+          TAG="x30-${OPENWRT_VERSION}-${UPSTREAM_SHA}-${PATCH_ID}-${CONFIG_HASH}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "patch_id=${PATCH_ID}" >> "$GITHUB_OUTPUT"
 
@@ -296,8 +270,7 @@ jobs:
           set -euo pipefail
 
           cp ../config/x30.config .config
-          printf '\n# VPN provider selected by workflow\n%s=y\n' "${VPN_CONFIG_SYMBOL}" >> .config
-          echo "Seed config with selected VPN provider (${VPN_PROVIDER}):"
+          echo "Seed config with Tailscale and NetBird"
           cat .config
 
           make defconfig
@@ -308,7 +281,8 @@ jobs:
           required_config_symbols=(
             CONFIG_TARGET_mediatek_filogic_DEVICE_totolink_X30
             CONFIG_PACKAGE_kmod-tun
-            "${VPN_CONFIG_SYMBOL}"
+            CONFIG_PACKAGE_tailscale
+            CONFIG_PACKAGE_netbird
             CONFIG_PACKAGE_ca-bundle
           )
 
@@ -420,7 +394,8 @@ jobs:
 
           required_manifest_packages=(
             kmod-tun
-            "${VPN_PROVIDER}"
+            tailscale
+            netbird
             ca-bundle
           )
 
@@ -434,7 +409,7 @@ jobs:
           done
 
           echo "Required manifest packages found:"
-          grep -E "^(kmod-tun|${VPN_PROVIDER}|ca-bundle)( |$)" "${X30_MANIFEST}"
+          grep -E "^(kmod-tun|tailscale|netbird|ca-bundle)( |$)" "${X30_MANIFEST}"
 
       - name: Upload diagnostics on failure
         if: failure()
@@ -455,7 +430,7 @@ jobs:
         if: steps.prep.outputs.skip_build != 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openwrt-totolink-x30-${{ steps.openwrt_release.outputs.openwrt_version }}-${{ steps.prep.outputs.vpn_provider }}
+          name: openwrt-totolink-x30-${{ steps.openwrt_release.outputs.openwrt_version }}
           path: out/*
           if-no-files-found: error
 
@@ -469,7 +444,6 @@ jobs:
           UPSTREAM_SHA: ${{ steps.prep.outputs.upstream_sha }}
           PATCH_ID: ${{ steps.prep.outputs.patch_id }}
           CONFIG_HASH: ${{ steps.prep.outputs.config_hash }}
-          VPN_PROVIDER: ${{ steps.prep.outputs.vpn_provider }}
         shell: bash
         run: |
           set -euo pipefail
@@ -481,7 +455,7 @@ jobs:
           Upstream OpenWrt release tag SHA: ${UPSTREAM_SHA}
           X30 patch: ${PATCH_ID}
           Build config/patch/workflow hash: ${CONFIG_HASH}
-          VPN provider: ${VPN_PROVIDER}
+          VPN providers: Tailscale and NetBird
           Target: mediatek/filogic
           Device profile: totolink_X30
 
@@ -491,7 +465,8 @@ jobs:
           - Legacy board-name compatibility for totolink,X30
           - Normalized board-name compatibility for totolink,x30
           - kmod-tun
-          - ${VPN_PROVIDER}
+          - Tailscale
+          - NetBird
           - ca-bundle
 
           Routine upgrades should use only:

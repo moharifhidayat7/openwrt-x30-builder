@@ -24,10 +24,10 @@ TOTOLINK X30
 - LuCI
 - LuCI HTTPS support
 - kmod-tun
-- One selectable VPN provider: Tailscale or NetBird
+- Tailscale and NetBird
 - ca-bundle
 
-The manual `workflow_dispatch` trigger exposes a **VPN provider** choice. Push and scheduled builds use Tailscale by default.
+The workflow includes both VPN clients in every firmware build.
 
 ## Post-flash Tailscale setup
 
